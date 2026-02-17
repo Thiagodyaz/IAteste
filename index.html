@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Camera, 
   Upload, 
@@ -16,7 +16,12 @@ import {
   Sparkles,
   Zap,
   Layers,
-  XCircle
+  XCircle,
+  Cpu,
+  Tag,
+  Hand,
+  UtensilsCrossed,
+  ScanSearch
 } from 'lucide-react';
 
 /* CONFIGURATION & UTILS
@@ -24,16 +29,23 @@ import {
 */
 const GEMINI_API_KEY = ""; // Injected by environment
 
+// AI Models Available
+const AI_MODELS = [
+  { id: 'gemini-2.5-flash-image-preview', name: 'Google Nano Banana (Flash 2.5)', desc: 'Mais rápido, excelente para variações.' },
+  { id: 'imagen-3.0-generate-001', name: 'Imagen 3 Pro (Simulado)', desc: 'Foco em realismo fotográfico extremo.' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro Vision', desc: 'Melhor compreensão de prompts complexos.' }
+];
+
 // Images for Style Buttons
 const STYLE_IMAGES = {
   macro: "https://images.unsplash.com/photo-1563379926898-05f4575a45d8?q=80&w=300&auto=format&fit=crop",
-  mom: "https://images.unsplash.com/photo-1551218808-94e220e084d2?q=80&w=300&auto=format&fit=crop",
+  hand: "https://images.unsplash.com/photo-1551218808-94e220e084d2?q=80&w=300&auto=format&fit=crop",
   eating: "https://images.unsplash.com/photo-1625937759429-451740071523?q=80&w=300&auto=format&fit=crop",
   man: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?q=80&w=300&auto=format&fit=crop",
   woman: "https://images.unsplash.com/photo-1603355417689-18e7314695c1?q=80&w=300&auto=format&fit=crop",
   flatlay: "https://images.unsplash.com/photo-1495147466023-ac5c588e2e94?q=80&w=300&auto=format&fit=crop",
-  moody: "https://images.unsplash.com/photo-1512058564366-18510be2db19?q=80&w=300&auto=format&fit=crop",
-  bright: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=300&auto=format&fit=crop"
+  menu: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=300&auto=format&fit=crop",
+  maxzoom: "https://images.unsplash.com/photo-1606787366850-de6330128bfc?q=80&w=300&auto=format&fit=crop"
 };
 
 // Styles presets
@@ -43,13 +55,34 @@ const STYLES = [
     label: 'Nenhum (Usar Prompt)',
     icon: <XCircle className="w-5 h-5" />,
     promptSuffix: "",
-    bgImage: null // No background image for "None"
+    bgImage: null 
+  },
+  {
+    id: 'menu',
+    label: 'Foto para Cardápio',
+    icon: <UtensilsCrossed className="w-5 h-5" />,
+    promptSuffix: "Professional menu photography, perfect lighting, color graded for appetite appeal, high saturation, sharp focus, neutral clean background, commercial look, advertisement quality, appetizing.",
+    bgImage: STYLE_IMAGES.menu
+  },
+  {
+    id: 'maxzoom',
+    label: 'Zoom Máximo (Detalhe)',
+    icon: <ScanSearch className="w-5 h-5" />,
+    promptSuffix: "Extreme macro close-up filling the entire frame, hyper-detailed texture, checking for pores and grains of the food, no background visible, just the product surface, 8k resolution.",
+    bgImage: STYLE_IMAGES.maxzoom
+  },
+  {
+    id: 'hand',
+    label: 'Foto com Mão',
+    icon: <Hand className="w-5 h-5" />,
+    promptSuffix: "First-person or side view showing a human hand holding or presenting the food, realistic skin texture, interacting with the product, casual dining atmosphere.",
+    bgImage: STYLE_IMAGES.hand
   },
   {
     id: 'macro',
     label: 'Macro Suculência',
     icon: <Maximize2 className="w-5 h-5" />,
-    promptSuffix: "Extreme close-up macro shot, shallow depth of field, focus on texture and glistening juices, food styling, highly detailed, 8k resolution, mouth-watering.",
+    promptSuffix: "Close-up macro shot, shallow depth of field, focus on texture and glistening juices, food styling, highly detailed, mouth-watering.",
     bgImage: STYLE_IMAGES.macro
   },
   {
@@ -58,27 +91,6 @@ const STYLES = [
     icon: <Layers className="w-5 h-5" />,
     promptSuffix: "Top-down flat lay photography, arranged neatly on a surface, balanced composition, natural light, minimalist background, high angle view.",
     bgImage: STYLE_IMAGES.flatlay
-  },
-  {
-    id: 'moody',
-    label: 'Dark & Moody',
-    icon: null,
-    promptSuffix: "Dark and moody food photography, chiaroscuro lighting, dramatic shadows, rustic wooden table, vintage props, rich colors, cinematic feel.",
-    bgImage: STYLE_IMAGES.moody
-  },
-  {
-    id: 'bright',
-    label: 'Bright & Airy',
-    icon: null,
-    promptSuffix: "Bright and airy food photography, soft natural light from a window, white marble surface, pastel colors, clean composition, fresh atmosphere.",
-    bgImage: STYLE_IMAGES.bright
-  },
-  {
-    id: 'mom',
-    label: 'Mãe Servindo',
-    icon: <Users className="w-5 h-5" />,
-    promptSuffix: "Third-person view, warm cozy lighting, hands of a caring mother figure serving this food, family atmosphere, authentic lifestyle photography, emotional connection.",
-    bgImage: STYLE_IMAGES.mom
   },
   {
     id: 'eating',
@@ -116,7 +128,7 @@ const CAMERAS = [
     id: 'iphone',
     label: 'iPhone 15 Pro',
     icon: <Smartphone className="w-4 h-4" />,
-    desc: "Nítido, HDR, Iluminação Natural, Grande Angular",
+    desc: "Nítido, HDR, Iluminação Natural",
     promptSuffix: " Shot on iPhone 15 Pro Max, natural lighting, sharp HDR, realistic social media aesthetic."
   }
 ];
@@ -124,21 +136,22 @@ const CAMERAS = [
 export default function App() {
   // --- State Management ---
   const [uploadedImage, setUploadedImage] = useState(null);
-  const [secondUploadedImage, setSecondUploadedImage] = useState(null); // New state for second image
+  const [secondUploadedImage, setSecondUploadedImage] = useState(null);
   
   const [foodAnalysis, setFoodAnalysis] = useState("");
-  const [secondImageAnalysis, setSecondImageAnalysis] = useState(""); // New state for second image analysis
+  const [secondImageAnalysis, setSecondImageAnalysis] = useState("");
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isAnalyzingSecond, setIsAnalyzingSecond] = useState(false); // New state
+  const [isAnalyzingSecond, setIsAnalyzingSecond] = useState(false);
   
   const [userPrompt, setUserPrompt] = useState("");
   const [optimizedPrompt, setOptimizedPrompt] = useState("");
   const [useOptimized, setUseOptimized] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   
-  const [selectedStyle, setSelectedStyle] = useState(STYLES[0]); // Default to 'Nenhum'
+  const [selectedStyle, setSelectedStyle] = useState(STYLES[0]);
   const [selectedCamera, setSelectedCamera] = useState(CAMERAS[0]);
+  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
   const [imageCount, setImageCount] = useState(1);
   const [isRandom, setIsRandom] = useState(false);
   
@@ -146,6 +159,28 @@ export default function App() {
   const [generatedImages, setGeneratedImages] = useState([]);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+
+  const promptTextareaRef = useRef(null);
+
+  // --- Helpers ---
+  
+  const insertTag = (tag) => {
+    const textarea = promptTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    const newText = text.substring(0, start) + tag + text.substring(end);
+    setUserPrompt(newText);
+    
+    // Restore focus and cursor position
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + tag.length, start + tag.length);
+    }, 0);
+  };
 
   // --- API Handlers ---
 
@@ -167,13 +202,12 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // 1. Analyze uploaded images
   const analyzeImage = async (base64Image, isSecond) => {
     const setIsAnalyzingFn = isSecond ? setIsAnalyzingSecond : setIsAnalyzing;
     const setAnalysisFn = isSecond ? setSecondImageAnalysis : setFoodAnalysis;
     const promptText = isSecond 
-      ? "Analise esta imagem. Descreva a cena, a composição, a pose da pessoa (se houver), a iluminação e o ângulo da câmera. Foque na estrutura da imagem, não no alimento específico."
-      : "Analise esta imagem de comida. Descreva os ingredientes principais, a aparência, a textura e o empratamento em detalhes vívidos. Seja conciso mas descritivo.";
+      ? "Analise esta imagem. Descreva a cena, o fundo, a iluminação e a posição de elementos humanos (mãos, pessoas) se houver. Ignore o prato específico, foque na composição."
+      : "Analise esta imagem de comida. Descreva APENAS o prato/alimento principal, seus ingredientes visíveis, texturas e cores. Seja direto.";
 
     setIsAnalyzingFn(true);
     setError("");
@@ -196,7 +230,7 @@ export default function App() {
       const data = await response.json();
       const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text || "Falha ao analisar imagem.";
       setAnalysisFn(analysis);
-      if (!isSecond) setOptimizedPrompt(""); // Reset prompt only on primary image change
+      if (!isSecond) setOptimizedPrompt(""); 
     } catch (err) {
       console.error(err);
       setError(`Erro ao analisar a ${isSecond ? 'segunda' : 'primeira'} imagem.`);
@@ -205,7 +239,6 @@ export default function App() {
     }
   };
 
-  // 2. Optimize User Prompt
   const optimizePrompt = async () => {
     if (!userPrompt && !foodAnalysis) return;
     setIsOptimizing(true);
@@ -224,10 +257,10 @@ export default function App() {
         ${selectedStyle.id !== 'none' ? `Estilo Desejado: ${selectedStyle.label}` : ''}
         Câmera: ${selectedCamera.label}
         
-        Sua tarefa: Reescreva um prompt EM INGLÊS altamente detalhado para um gerador de imagem AI.
-        Inclua detalhes sobre iluminação, composição, ISO, texturas e cores.
-        Se houver duas análises de imagem, o prompt deve instruir a combinar o produto da Imagem 1 na cena/composição da Imagem 2.
-        Não inclua introduções, apenas o prompt.
+        Sua tarefa: Reescreva um prompt EM INGLÊS altamente detalhado para geração de imagem.
+        Se o usuário usou a tag [PRODUTO], substitua pela descrição detalhada do produto.
+        Se o usuário usou a tag [CENA], substitua pela descrição detalhada da cena de referência.
+        Instrua a IA a integrar o produto na cena de forma fotorrealista.
       `;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`, {
@@ -249,7 +282,6 @@ export default function App() {
     }
   };
 
-  // 3. Generate Images (Loop for multiple)
   const generateImages = async () => {
     if (!uploadedImage && !userPrompt) {
       setError("Por favor, envie uma imagem principal ou escreva um prompt.");
@@ -261,19 +293,31 @@ export default function App() {
     setProgress(0);
     setError("");
 
-    // Determine Base Prompt
+    // --- Prompt Construction Logic with Tags ---
     let finalBasePrompt = useOptimized && optimizedPrompt ? optimizedPrompt : userPrompt;
     
-    // Fallback if no prompt, construct based on available inputs
-    if (!finalBasePrompt) {
-      if (uploadedImage && secondUploadedImage) {
-         finalBasePrompt = `A professional photograph showing the food product from the first image (${foodAnalysis}) placed realistically within the scene, composition, and lighting of the second image (${secondImageAnalysis}). The person or elements from the second image are interacting with the product from the first image.`;
-      } else if (uploadedImage) {
-         finalBasePrompt = `Professional food photography of ${foodAnalysis}`;
-      } else {
-         finalBasePrompt = userPrompt; // Should not happen due to initial check, but safe fallback
-      }
+    // 1. Tag Replacement (Variable injection)
+    if (!useOptimized) {
+        if (finalBasePrompt.includes('[PRODUTO]')) {
+            finalBasePrompt = finalBasePrompt.replace(/\[PRODUTO\]/g, `the food product (${foodAnalysis})`);
+        }
+        if (finalBasePrompt.includes('[CENA]')) {
+            finalBasePrompt = finalBasePrompt.replace(/\[CENA\]/g, `the scene style and composition (${secondImageAnalysis})`);
+        }
+        
+        // If no prompt provided but tags exist implicitly via images
+        if (!finalBasePrompt) {
+             if (uploadedImage && secondUploadedImage) {
+                 finalBasePrompt = `Professional food photography of (${foodAnalysis}) seamlessly integrated into a scene with (${secondImageAnalysis}).`;
+             } else if (uploadedImage) {
+                 finalBasePrompt = `Professional food photography of ${foodAnalysis}.`;
+             }
+        }
     }
+
+    // Always fallback to standard API model for actual generation in this demo
+    // but we simulate the choice in prompt nuance if needed
+    const apiModel = "gemini-2.5-flash-image-preview"; 
 
     try {
       const newImages = [];
@@ -291,15 +335,21 @@ export default function App() {
 
         // Add Randomness
         if (isRandom) {
-           const angles = ["low angle", "top-down flat lay", "45-degree angle", "dutch angle"];
-           const lights = ["morning sunlight", "moody candlelight", "studio softbox", "kitchen window light", "dramatic side lighting"];
-           const randomAngle = angles[Math.floor(Math.random() * angles.length)];
-           const randomLight = lights[Math.floor(Math.random() * lights.length)];
-           iterationPrompt += ` Variation: ${randomAngle}, ${randomLight}. Seed: ${Math.random().toString(36).substring(7)}`;
+           const variations = [
+               "morning lighting, soft shadows", 
+               "dramatic evening lighting", 
+               "top-down view with scattered ingredients", 
+               "side angle with depth of field",
+               "warm color palette",
+               "cool color palette"
+            ];
+           const randomVar = variations[Math.floor(Math.random() * variations.length)];
+           iterationPrompt += ` Variation: ${randomVar}. Seed: ${Math.random().toString(36).substring(7)}`;
         }
 
-        // Prepare contents with 1 or 2 images
         const contentsParts = [{ text: iterationPrompt }];
+        
+        // Add images to payload (Multimodal)
         if (uploadedImage) {
           contentsParts.push({ inlineData: { mimeType: "image/jpeg", data: uploadedImage.split(',')[1] } });
         }
@@ -307,8 +357,7 @@ export default function App() {
           contentsParts.push({ inlineData: { mimeType: "image/jpeg", data: secondUploadedImage.split(',')[1] } });
         }
 
-        // Using 'gemini-2.5-flash-image-preview' (Nano Banana)
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -329,7 +378,6 @@ export default function App() {
             setGeneratedImages(prev => [...prev, imgData]);
         } else {
             console.warn("No image in response for iteration", i);
-            // Optional: Handle error for specific iteration
         }
 
         setProgress(Math.round(((i + 1) / imageCount) * 100));
@@ -337,26 +385,25 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      setError("Erro durante a geração. Tente menos imagens ou um prompt diferente.");
+      setError("Erro durante a geração. Verifique conexão ou tente outro modelo.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Helper component for image upload slots
   const ImageUploadSlot = ({ label, imageState, isAnalyzingState, analysisState, onUpload, onRemove, id }) => (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 relative">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 relative group hover:border-yellow-500/50 transition-all">
         <h3 className="text-sm font-medium text-neutral-400 mb-3 flex items-center gap-2">
             {id === 1 ? <Upload className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
             {label}
         </h3>
-        <div className="relative group">
+        <div className="relative">
             {!imageState ? (
             <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-neutral-700 rounded-xl cursor-pointer hover:border-yellow-500 hover:bg-neutral-800 transition-all">
                 <div className="bg-neutral-800 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
                 <ImageIcon className="w-5 h-5 text-neutral-400" />
                 </div>
-                <span className="text-xs font-medium text-neutral-300 text-center px-2">Clique para enviar</span>
+                <span className="text-xs font-medium text-neutral-300 text-center px-2">Adicionar Foto</span>
                 <input type="file" className="hidden" accept="image/*" onChange={onUpload} />
             </label>
             ) : (
@@ -371,7 +418,7 @@ export default function App() {
                     <div className="w-full">
                         <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] text-green-400 font-mono flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" /> Pronto
+                            <Sparkles className="w-3 h-3" /> Analisado
                         </span>
                         <button 
                             onClick={onRemove}
@@ -380,8 +427,8 @@ export default function App() {
                             <XCircle className="w-5 h-5" />
                         </button>
                         </div>
-                        <p className="text-[10px] text-neutral-300 line-clamp-2 italic">
-                        "{analysisState}"
+                        <p className="text-[10px] text-neutral-300 line-clamp-1 italic truncate">
+                        {id === 1 ? "Tag: [PRODUTO]" : "Tag: [CENA]"}
                         </p>
                     </div>
                 )}
@@ -389,44 +436,42 @@ export default function App() {
             </div>
             )}
         </div>
-        {id === 1 && (
-            <div className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 hidden lg:block">
-                {/* Arrow indicating flow */}
-            </div>
-        )}
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-yellow-500 selection:text-black">
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-yellow-500 selection:text-black flex flex-col">
       {/* Header */}
       <header className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-gradient-to-br from-yellow-400 to-orange-600 p-2 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-yellow-400 to-orange-600 p-2 rounded-lg shadow-lg shadow-yellow-500/10">
               <ChefHat className="text-black w-6 h-6" />
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">GastroStudio <span className="text-yellow-500">AI</span></h1>
-              <p className="text-xs text-neutral-400">Powered by Google Nano Flash 2.5</p>
+              <p className="text-[10px] text-neutral-400 font-medium tracking-wide">
+                PROGRAMA CRIADO POR THIAGO DYAZ
+              </p>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-4 text-sm text-neutral-400">
-             <span>v2.1.0 Beta (Composição)</span>
+          <div className="hidden md:flex items-center gap-4 text-xs font-mono text-neutral-500">
+             <span>Build v3.0.0</span>
+             <span className="bg-neutral-800 px-2 py-1 rounded text-neutral-300">GitHub Ready</span>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
         
         {/* Left Column: Controls */}
         <div className="lg:col-span-5 space-y-6">
           
-          {/* 1. Upload Section (Dual Slot) */}
+          {/* 1. Upload Section */}
           <div className="grid grid-cols-2 gap-4">
             <ImageUploadSlot 
                 id={1}
-                label="Produto Principal (Ex: Hambúrguer)"
+                label="Produto (Comida)"
                 imageState={uploadedImage}
                 isAnalyzingState={isAnalyzing}
                 analysisState={foodAnalysis}
@@ -435,7 +480,7 @@ export default function App() {
             />
             <ImageUploadSlot 
                 id={2}
-                label="Cena/Referência (Ex: Pessoa comendo)"
+                label="Cena (Referência)"
                 imageState={secondUploadedImage}
                 isAnalyzingState={isAnalyzingSecond}
                 analysisState={secondImageAnalysis}
@@ -443,19 +488,37 @@ export default function App() {
                 onRemove={() => { setSecondUploadedImage(null); setSecondImageAnalysis(""); }}
             />
           </div>
-          
-          {uploadedImage && secondUploadedImage && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-xs text-yellow-200 flex items-start gap-2">
-                <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <p>Modo de Composição Ativado: O produto da imagem 1 será inserido na cena e pose da imagem 2.</p>
-            </div>
-          )}
 
-
-          {/* 2. Configuration */}
+          {/* 2. Configuration & Model Selection */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
             
-            {/* Style Selection (Visual Buttons) */}
+             {/* AI Model Selector */}
+             <div>
+               <h3 className="text-sm font-medium text-neutral-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                  <Cpu className="w-4 h-4" /> Motor de Geração
+               </h3>
+               <div className="space-y-2">
+                  {AI_MODELS.map(model => (
+                    <button
+                        key={model.id}
+                        onClick={() => setSelectedModel(model)}
+                        className={`w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
+                            selectedModel.id === model.id 
+                            ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400' 
+                            : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:bg-neutral-750'
+                        }`}
+                    >
+                        <div>
+                            <div className="text-xs font-bold">{model.name}</div>
+                            <div className="text-[10px] opacity-70">{model.desc}</div>
+                        </div>
+                        {selectedModel.id === model.id && <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_10px_#eab308]" />}
+                    </button>
+                  ))}
+               </div>
+            </div>
+
+            {/* Style Selection */}
             <div>
               <h3 className="text-sm font-medium text-neutral-400 mb-3 uppercase tracking-wider">Estilo de Cena</h3>
               <div className="grid grid-cols-3 gap-2">
@@ -465,22 +528,17 @@ export default function App() {
                     onClick={() => setSelectedStyle(style)}
                     className={`relative h-20 rounded-lg overflow-hidden border transition-all group ${
                       selectedStyle.id === style.id
-                        ? 'border-yellow-500'
+                        ? 'border-yellow-500 shadow-[0_0_15px_-5px_#eab308]'
                         : 'border-neutral-800 hover:border-neutral-500'
                     }`}
                   >
                     {style.bgImage && (
-                        <img src={style.bgImage} alt={style.label} className="absolute inset-0 w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all opacity-50 group-hover:opacity-80" />
+                        <img src={style.bgImage} alt={style.label} className="absolute inset-0 w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all opacity-40 group-hover:opacity-70" />
                     )}
-                    <div className={`absolute inset-0 bg-gradient-to-t ${selectedStyle.id === style.id ? 'from-yellow-900/80 via-black/40' : 'from-black/80 via-black/40'} to-transparent p-2 flex flex-col justify-end items-start`}>
+                    <div className={`absolute inset-0 bg-gradient-to-t ${selectedStyle.id === style.id ? 'from-yellow-900/90 via-black/50' : 'from-black/90 via-black/50'} to-transparent p-2 flex flex-col justify-end items-start`}>
                         {style.icon && <div className={`mb-1 ${selectedStyle.id === style.id ? 'text-yellow-400' : 'text-neutral-300'}`}>{style.icon}</div>}
-                        <span className={`text-xs font-bold leading-tight ${selectedStyle.id === style.id ? 'text-white' : 'text-neutral-200'}`}>{style.label}</span>
+                        <span className={`text-[10px] font-bold leading-tight ${selectedStyle.id === style.id ? 'text-white' : 'text-neutral-200'}`}>{style.label}</span>
                     </div>
-                    {style.id === 'none' && selectedStyle.id !== 'none' && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
-                            <XCircle className="text-neutral-500 w-6 h-6" />
-                        </div>
-                    )}
                   </button>
                 ))}
               </div>
@@ -488,7 +546,7 @@ export default function App() {
 
             {/* Camera Selection */}
             <div>
-               <h3 className="text-sm font-medium text-neutral-400 mb-3 uppercase tracking-wider">Lente & Câmera</h3>
+               <h3 className="text-sm font-medium text-neutral-400 mb-3 uppercase tracking-wider">Câmera</h3>
                <div className="grid grid-cols-2 gap-2">
                  {CAMERAS.map((cam) => (
                    <button
@@ -505,40 +563,26 @@ export default function App() {
                    </button>
                  ))}
                </div>
-               <p className="text-xs text-neutral-500 mt-2 text-center">{selectedCamera.desc}</p>
             </div>
 
-            {/* Settings: Count & Random */}
-            <div className="space-y-4 pt-4 border-t border-neutral-800">
-               <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium">Qtd. Imagens</label>
-                  <div className="flex items-center gap-2 bg-neutral-800 rounded-lg p-1">
-                     <input 
-                       type="range" 
-                       min="1" 
-                       max="10" 
-                       value={imageCount} 
-                       onChange={(e) => setImageCount(parseInt(e.target.value))}
-                       className="w-24 accent-yellow-500 h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer"
-                     />
-                     <span className="text-xs font-mono w-6 text-center">{imageCount}</span>
-                  </div>
+            {/* Count & Random */}
+            <div className="flex items-center gap-4 pt-2">
+               <div className="flex-1 bg-neutral-800 rounded-lg p-2 flex items-center justify-between px-3">
+                  <span className="text-xs text-neutral-400">Qtd</span>
+                  <input 
+                    type="range" min="1" max="10" 
+                    value={imageCount} 
+                    onChange={(e) => setImageCount(parseInt(e.target.value))}
+                    className="w-20 accent-yellow-500 h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <span className="text-xs font-bold w-4 text-center">{imageCount}</span>
                </div>
-
-               <div className="flex justify-between items-center">
-                  <div className="flex flex-col">
-                     <label className="text-sm font-medium flex items-center gap-2">
-                        <RefreshCcw className="w-3 h-3" /> Modo Random
-                     </label>
-                     <span className="text-[10px] text-neutral-500">Variações de luz a cada foto</span>
-                  </div>
-                  <button 
-                     onClick={() => setIsRandom(!isRandom)}
-                     className={`w-12 h-6 rounded-full relative transition-colors ${isRandom ? 'bg-yellow-500' : 'bg-neutral-700'}`}
-                  >
-                     <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${isRandom ? 'translate-x-6' : 'translate-x-0'}`} />
-                  </button>
-               </div>
+               <button 
+                  onClick={() => setIsRandom(!isRandom)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${isRandom ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-neutral-800 border-neutral-700 text-neutral-400'}`}
+               >
+                  <RefreshCcw className="w-3 h-3" /> Random
+               </button>
             </div>
 
           </div>
@@ -547,25 +591,44 @@ export default function App() {
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
              <div>
                 <div className="flex justify-between items-center mb-2">
-                   <label className="text-sm font-medium text-neutral-300">Seu Prompt (Opcional)</label>
+                   <label className="text-sm font-medium text-neutral-300">Prompt Personalizado</label>
                    <button 
                      onClick={optimizePrompt}
                      disabled={isOptimizing || (!uploadedImage && !userPrompt)}
                      className="text-xs flex items-center gap-1 text-yellow-500 hover:text-yellow-400 disabled:opacity-50"
                    >
                       {isOptimizing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                      Otimizar Prompt
+                      Melhorar Texto
                    </button>
                 </div>
+                
+                {/* Tag Buttons */}
+                <div className="flex gap-2 mb-2">
+                    <button 
+                        onClick={() => insertTag("[PRODUTO]")}
+                        disabled={!foodAnalysis}
+                        className="flex items-center gap-1 text-[10px] bg-neutral-800 hover:bg-neutral-700 text-green-400 px-2 py-1 rounded border border-neutral-700 disabled:opacity-30 transition-colors"
+                    >
+                        <Tag className="w-3 h-3" /> + [PRODUTO]
+                    </button>
+                    <button 
+                        onClick={() => insertTag("[CENA]")}
+                        disabled={!secondImageAnalysis}
+                        className="flex items-center gap-1 text-[10px] bg-neutral-800 hover:bg-neutral-700 text-blue-400 px-2 py-1 rounded border border-neutral-700 disabled:opacity-30 transition-colors"
+                    >
+                        <Tag className="w-3 h-3" /> + [CENA]
+                    </button>
+                </div>
+
                 <textarea
+                  ref={promptTextareaRef}
                   value={userPrompt}
                   onChange={(e) => setUserPrompt(e.target.value)}
-                  placeholder={uploadedImage && secondUploadedImage ? "Ex: Garanta que o queijo do hambúrguer esteja derretido e brilhante na nova cena." : "Ex: Adicione fumaça saindo do prato, ambiente de jantar romântico..."}
-                  className="w-full bg-black/30 border border-neutral-700 rounded-lg p-3 text-sm text-neutral-200 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none resize-none h-24"
+                  placeholder="Ex: Um delicioso [PRODUTO] sendo servido em um [CENA] com iluminação de fim de tarde."
+                  className="w-full bg-black/30 border border-neutral-700 rounded-lg p-3 text-sm text-neutral-200 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none resize-none h-24 font-mono leading-relaxed"
                 />
              </div>
 
-             {/* Optimized Prompt Preview (Toggle) */}
              {optimizedPrompt && (
                 <div className="bg-neutral-800/50 rounded-lg p-3 border border-yellow-500/20">
                    <div className="flex items-center gap-2 mb-2">
@@ -577,10 +640,10 @@ export default function App() {
                         className="accent-yellow-500 rounded cursor-pointer"
                       />
                       <label htmlFor="useOpt" className="text-xs font-bold text-yellow-400 cursor-pointer">
-                         Usar Prompt Otimizado (AI)
+                         Usar Prompt Melhorado
                       </label>
                    </div>
-                   <p className="text-[10px] text-neutral-400 font-mono line-clamp-3">
+                   <p className="text-[10px] text-neutral-400 font-mono line-clamp-2">
                       {optimizedPrompt}
                    </p>
                 </div>
@@ -597,7 +660,7 @@ export default function App() {
              >
                 {isGenerating ? (
                    <>
-                     <Loader2 className="animate-spin" /> Gerando {progress}%
+                     <Loader2 className="animate-spin" /> Processando {progress}%
                    </>
                 ) : (
                    <>
@@ -605,30 +668,37 @@ export default function App() {
                    </>
                 )}
              </button>
-             {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+             {error && <p className="text-red-400 text-xs text-center mt-2 bg-red-500/10 p-2 rounded">{error}</p>}
           </div>
 
         </div>
 
         {/* Right Column: Gallery */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="flex items-center justify-between">
-             <h2 className="text-xl font-bold">Galeria do Estúdio</h2>
+        <div className="lg:col-span-7 flex flex-col h-full">
+          <div className="flex items-center justify-between mb-6">
+             <h2 className="text-xl font-bold flex items-center gap-2">
+                <ImageUploadSlot id={99} label="" imageState={null} onUpload={()=>{}} onRemove={()=>{}} /> 
+                {/* Dummy component for layout logic reference only, ignore */}
+                <span className="hidden"></span>
+                Galeria do Estúdio
+             </h2>
              {generatedImages.length > 0 && (
-                <span className="text-xs bg-neutral-800 px-3 py-1 rounded-full text-neutral-400">
+                <span className="text-xs bg-neutral-800 px-3 py-1 rounded-full text-neutral-400 border border-neutral-700">
                    {generatedImages.length} Resultados
                 </span>
              )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min content-start">
              {/* Empty State */}
              {generatedImages.length === 0 && !isGenerating && (
-                <div className="col-span-full h-96 border-2 border-dashed border-neutral-800 rounded-3xl flex flex-col items-center justify-center text-neutral-600 bg-neutral-900/20 text-center p-6">
-                   <Camera className="w-12 h-12 mb-4 opacity-50" />
-                   <p className="text-lg font-medium">Aguardando Produção</p>
-                   <p className="text-sm mt-2 max-w-md">
-                      Envie uma imagem do produto, opcionalmente uma imagem de referência de cena, escolha suas configurações e clique em Gerar.
+                <div className="col-span-full h-full min-h-[400px] border-2 border-dashed border-neutral-800 rounded-3xl flex flex-col items-center justify-center text-neutral-600 bg-neutral-900/20 text-center p-6">
+                   <div className="bg-neutral-800/50 p-6 rounded-full mb-4">
+                        <Camera className="w-12 h-12 opacity-50" />
+                   </div>
+                   <p className="text-lg font-medium text-neutral-400">Estúdio Vazio</p>
+                   <p className="text-sm mt-2 max-w-sm text-neutral-500">
+                      Configure suas câmeras, escolha o motor de IA e clique em gerar para ver a mágica acontecer.
                    </p>
                 </div>
              )}
@@ -637,8 +707,9 @@ export default function App() {
              {isGenerating && generatedImages.length === 0 && (
                 <>
                    {[...Array(imageCount > 4 ? 4 : imageCount)].map((_, i) => (
-                      <div key={i} className="aspect-square bg-neutral-900 rounded-2xl animate-pulse flex items-center justify-center">
-                         <Loader2 className="w-8 h-8 text-neutral-700 animate-spin" />
+                      <div key={i} className="aspect-square bg-neutral-900 rounded-2xl animate-pulse flex flex-col items-center justify-center border border-neutral-800">
+                         <Loader2 className="w-8 h-8 text-yellow-500/50 animate-spin mb-2" />
+                         <span className="text-xs text-neutral-500 font-mono">Renderizando...</span>
                       </div>
                    ))}
                 </>
@@ -650,28 +721,32 @@ export default function App() {
                    <img 
                      src={img} 
                      alt={`Generated ${idx}`} 
-                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
                    />
                    
                    {/* Overlay */}
-                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6">
-                      <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform">
-                         <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs font-bold bg-yellow-500 text-black px-2 py-0.5 rounded">HQ</span>
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-6">
+                      <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                         <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <span className="text-[10px] font-bold bg-yellow-500 text-black px-2 py-0.5 rounded uppercase tracking-wider">
+                                {selectedModel.name.split(' ')[0]}
+                            </span>
                             {selectedStyle.id !== 'none' && (
-                                <span className="text-xs text-white/70">{selectedStyle.label}</span>
+                                <span className="text-[10px] text-white/90 bg-white/20 px-2 py-0.5 rounded backdrop-blur-sm">
+                                    {selectedStyle.label}
+                                </span>
                             )}
                          </div>
                          <button 
                            onClick={() => {
                               const link = document.createElement('a');
                               link.href = img;
-                              link.download = `gastro-studio-${Date.now()}.png`;
+                              link.download = `thiago-dyaz-gastro-${Date.now()}.png`;
                               link.click();
                            }}
-                           className="w-full bg-white text-black py-2 rounded-lg font-bold text-sm hover:bg-neutral-200 flex items-center justify-center gap-2"
+                           className="w-full bg-white text-black py-3 rounded-lg font-bold text-sm hover:bg-neutral-200 flex items-center justify-center gap-2 transition-colors"
                          >
-                            <Download className="w-4 h-4" /> Download
+                            <Download className="w-4 h-4" /> Baixar Imagem
                          </button>
                       </div>
                    </div>
@@ -681,6 +756,22 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-neutral-800 bg-neutral-900 py-6 mt-8">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-neutral-500">
+                <ChefHat className="w-5 h-5" />
+                <span className="text-sm font-semibold">GastroStudio AI</span>
+            </div>
+            <div className="text-center md:text-right">
+                <p className="text-xs text-neutral-400">Desenvolvido com tecnologia Google Gemini</p>
+                <p className="text-xs font-bold text-yellow-600 mt-1 uppercase tracking-widest">
+                    Programa criado por Thiago Dyaz
+                </p>
+            </div>
+        </div>
+      </footer>
     </div>
   );
 }
